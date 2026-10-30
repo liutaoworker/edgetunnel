@@ -1,5 +1,6 @@
 ﻿const Version = '2026-09-22 20:01:17';
 let config_JSON, 缓存SOCKS5白名单 = null, 调试日志打印 = false;
+let 用户IDMD5缓存 = null;
 let SOCKS5白名单 = ['*tapecontent.net', '*cloudatacdn.com', '*loadshare.org', '*cdn-centaurus.com', 'scholar.google.com'];
 const Pages静态页面 = 'https://edt-pages.github.io';
 ///////////////////////////////////////////////////////全局常量和工具函数///////////////////////////////////////////////
@@ -29,7 +30,7 @@ export default {
 		const upgradeHeader = (request.headers.get('Upgrade') || '').toLowerCase(), contentType = (request.headers.get('content-type') || '').toLowerCase();
 		const 管理员密码 = env.ADMIN || env.admin || env.PASSWORD || env.password || env.pswd || env.TOKEN || env.KEY || env.UUID || env.uuid;
 		const 加密秘钥 = env.KEY || '勿动此默认密钥，有需求请自行通过添加变量KEY进行修改';
-		const userIDMD5 = await MD5MD5(管理员密码 + 加密秘钥);
+		const userIDMD5 = await 获取缓存用户IDMD5(管理员密码 + 加密秘钥);
 		const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
 		const envUUID = env.UUID || env.uuid;
 		const userID = (envUUID && uuidRegex.test(envUUID)) ? envUUID.toLowerCase() : [userIDMD5.slice(0, 8), userIDMD5.slice(8, 12), '4' + userIDMD5.slice(13, 16), '8' + userIDMD5.slice(17, 20), userIDMD5.slice(20)].join('-');
@@ -2215,10 +2216,17 @@ async function forwardataTCP(host, portNum, rawData, ws, respHeader, remoteConnW
 	};
 
 	async function 等待连接建立(remoteSock, timeoutMs = 连接超时毫秒) {
-		await Promise.race([
-			remoteSock.opened,
-			new Promise((_, reject) => setTimeout(() => reject(new Error('连接超时')), timeoutMs))
-		]);
+		let 连接超时定时器;
+		try {
+			await Promise.race([
+				remoteSock.opened,
+				new Promise((_, reject) => {
+					连接超时定时器 = setTimeout(() => reject(new Error('连接超时')), timeoutMs);
+				})
+			]);
+		} finally {
+			if (连接超时定时器 !== undefined) clearTimeout(连接超时定时器);
+		}
 	}
 
 	async function 打开TCP连接(address, port) {
@@ -5400,6 +5408,17 @@ function 掩码敏感信息(文本, 前缀长度 = 3, 后缀长度 = 2) {
 	return `${前缀}${'*'.repeat(星号数量)}${后缀}`;
 }
 
+async function 获取缓存用户IDMD5(文本) {
+	if (用户IDMD5缓存?.文本 === 文本) return 用户IDMD5缓存.任务;
+	const 当前缓存 = { 文本, 任务: null };
+	当前缓存.任务 = MD5MD5(文本).catch(error => {
+		if (用户IDMD5缓存 === 当前缓存) 用户IDMD5缓存 = null;
+		throw error;
+	});
+	用户IDMD5缓存 = 当前缓存;
+	return 当前缓存.任务;
+}
+
 async function MD5MD5(文本) {
 	const 编码器 = new TextEncoder();
 
@@ -6643,3 +6662,4 @@ async function html1101(host, 访问IP) {
 </body>
 </html>`;
 }
+
